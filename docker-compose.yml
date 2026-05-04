@@ -21,9 +21,12 @@ services:
         restart: unless-stopped
         ports:
             - "80:80"
+            - "443:443"
         volumes:
             - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
             - ./public:/var/www/public:ro
+            - certbot-webroot:/var/www/certbot:ro
+            - certbot-etc:/etc/letsencrypt:ro
         depends_on:
             - app
         networks:
@@ -79,6 +82,8 @@ services:
 volumes:
     db-data:
     storage-data:
+    certbot-webroot:
+    certbot-etc:
 
 networks:
     app-network:
