@@ -1,5 +1,6 @@
-## Jenkins stack — runs independently of the main app stack so the CI/CD
-## server is never restarted by an app deploy.
+## Jenkins stack — runs alongside the main app stack and joins its network
+## so the main nginx can reverse-proxy `jenkins.devopstrainer.cloud` to the
+## Jenkins container directly. No second nginx, no second certbot.
 ##
 ## Run with:
 ##   docker compose -f jenkins/docker-compose.yml up -d --build
@@ -17,48 +18,22 @@ services:
         volumes:
             - jenkins-data:/var/jenkins_home
             - /var/run/docker.sock:/var/run/docker.sock
-            # Mount the deployed app so the pipeline's Deploy stage can
-            # `cd /home/ubuntu/devops-practical && git pull && docker compose ...`
+            # The pipeline's Deploy stage does
+            #   `cd /home/ubuntu/devops-practical && git pull && docker compose ...`
+            # so mount the deployed app at the same path inside the container.
             - /home/ubuntu/devops-practical:/home/ubuntu/devops-practical
         expose:
             - "8080"
         networks:
-            - jenkins-network
-
-    nginx:
-        image: nginx:alpine
-        container_name: jenkins-nginx
-        restart: unless-stopped
-        ports:
-            - "80:80"
-            - "443:443"
-        volumes:
-            - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
-            - certbot-webroot:/var/www/certbot:ro
-            - certbot-etc:/etc/letsencrypt:ro
-        depends_on:
-            - jenkins
-        networks:
-            - jenkins-network
-
-    certbot:
-        image: certbot/certbot:latest
-        container_name: jenkins-certbot
-        volumes:
-            - certbot-webroot:/var/www/certbot
-            - certbot-etc:/etc/letsencrypt
-        entrypoint: /bin/sh
-        command: -c "trap exit TERM; while :; do certbot renew --webroot -w /var/www/certbot --quiet; sleep 12h & wait $${!}; done"
-        depends_on:
-            - nginx
-        networks:
-            - jenkins-network
+            - default
 
 volumes:
     jenkins-data:
-    certbot-webroot:
-    certbot-etc:
 
+# Join the main app's docker network (created by the root docker-compose.yml
+# under the project name `devops-practical`). The main nginx lives there and
+# will resolve `jenkins:8080` once this container joins.
 networks:
-    jenkins-network:
-        driver: bridge
+    default:
+        name: devops-practical_app-network
+        external: true
